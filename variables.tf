@@ -12,3 +12,6 @@ variable "backups" {
   description = ""
 }
 
+variable "kms_key_arn" { default = null }
+
+variable "kms_multi_region" { default = false }

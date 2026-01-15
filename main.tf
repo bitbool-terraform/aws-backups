@@ -1,8 +1,40 @@
+data "aws_caller_identity" "current" {}
+
 resource "aws_kms_key" "aws_backup_key" {
+  count = var.kms_key_arn == null ? 1 : 0
   description             = format("%s-AWSBackupKMSKey",var.namePrefix)
   deletion_window_in_days = 30
   enable_key_rotation     = true
+  multi_region            = var.kms_multi_region
+  
+  policy  = data.aws_iam_policy_document.aws_backup_key[0].json  
 }
+
+data "aws_iam_policy_document" "aws_backup_key" {
+  count = var.kms_key_arn == null ? 1 : 0
+
+  statement {
+    sid = "Admin access"
+    effect = "Allow"
+    actions = [ "kms:*" ]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = [data.aws_caller_identity.current.arn]
+    }
+  }  
+  statement {
+    sid = "Root access"
+    effect = "Allow"
+    actions = [ "kms:*" ]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = [format("arn:aws:iam::%s:root",data.aws_caller_identity.current.account_id)]
+    }
+  }    
+}
+
 
 resource "aws_backup_vault_notifications" "backup" {
   backup_vault_name   = aws_backup_vault.backup-vault.name
@@ -12,7 +44,7 @@ resource "aws_backup_vault_notifications" "backup" {
 
 resource "aws_backup_vault" "backup-vault" {
   name        = format("%s-backupVault",var.namePrefix)
-  kms_key_arn = aws_kms_key.aws_backup_key.arn
+  kms_key_arn = try(var.kms_key_arn,aws_kms_key.aws_backup_key[0].arn)
   tags = {
     Role = "backup-vault"
   }
